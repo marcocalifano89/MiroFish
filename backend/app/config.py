@@ -1,6 +1,7 @@
 """\n配置管理\n统一从项目根目录的 .env 文件加载配置\n"""
 
 import os
+import shutil
 from dotenv import load_dotenv
 
 # 加载项目根目录的 .env 文件
@@ -24,10 +25,36 @@ class Config:
     # JSON配置 - 禁用ASCII转义，让中文直接显示
     JSON_AS_ASCII = False
     
-    # LLM配置（统一使用OpenAI格式）
-    LLM_API_KEY = os.environ.get('LLM_API_KEY')
-    LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
-    LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
+    # LLM providers. Subscription modes use the provider's supported CLI login
+    # through a loopback-only OpenAI-compatible bridge; no account token is read.
+    LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'api').strip().lower()
+    SUBSCRIPTION_PROVIDERS = {'codex_subscription', 'claude_subscription'}
+    _is_subscription_provider = LLM_PROVIDER in SUBSCRIPTION_PROVIDERS
+    LLM_API_KEY = os.environ.get('LLM_API_KEY') or (
+        'mirofish-local-subscription' if _is_subscription_provider else None
+    )
+    LLM_BASE_URL = (
+        'http://127.0.0.1:5001/llm-compat/v1'
+        if _is_subscription_provider
+        else os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
+    )
+    _configured_llm_model = os.environ.get('LLM_MODEL_NAME', '').strip()
+    if LLM_PROVIDER == 'claude_subscription':
+        LLM_MODEL_NAME = (
+            'sonnet' if not _configured_llm_model or _configured_llm_model == 'qwen-plus'
+            else _configured_llm_model
+        )
+    elif LLM_PROVIDER == 'codex_subscription':
+        # Let Codex CLI use the model selected in its own authenticated profile.
+        LLM_MODEL_NAME = 'default'
+    else:
+        LLM_MODEL_NAME = _configured_llm_model or 'gpt-4o-mini'
+
+    if _is_subscription_provider:
+        # The OASIS child process inherits these values and uses the same local bridge.
+        os.environ['LLM_API_KEY'] = LLM_API_KEY
+        os.environ['LLM_BASE_URL'] = LLM_BASE_URL
+        os.environ['LLM_MODEL_NAME'] = LLM_MODEL_NAME
     
     # Zep配置
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
@@ -64,8 +91,14 @@ class Config:
     def validate(cls) -> list[str]:
         """验证必要配置"""
         errors: list[str] = []
-        if not cls.LLM_API_KEY:
+        if cls.LLM_PROVIDER == 'api' and not cls.LLM_API_KEY:
             errors.append("LLM_API_KEY 未配置")
+        elif cls.LLM_PROVIDER == 'codex_subscription' and not shutil.which('codex'):
+            errors.append("Codex CLI non trovato; installalo e accedi con il tuo piano ChatGPT")
+        elif cls.LLM_PROVIDER == 'claude_subscription' and not shutil.which('claude'):
+            errors.append("Claude Code CLI non trovato; installalo e accedi con il tuo piano Claude")
+        elif cls.LLM_PROVIDER not in {'api', *cls.SUBSCRIPTION_PROVIDERS}:
+            errors.append("LLM_PROVIDER deve essere api, codex_subscription o claude_subscription")
         if not cls.ZEP_API_KEY:
             errors.append("ZEP_API_KEY 未配置")
         if os.environ.get("ZEP_API_URL"):

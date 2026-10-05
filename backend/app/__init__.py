@@ -53,6 +53,9 @@ def create_app(config_class=Config):
     def log_request():
         logger = get_logger('mirofish.request')
         logger.debug(f"请求: {request.method} {request.path}")
+        # LLM prompts may contain private uploaded material; never log bridge bodies.
+        if request.path.startswith('/llm-compat/'):
+            return
         if request.content_type and 'json' in request.content_type:
             logger.debug(f"请求体: {request.get_json(silent=True)}")
     
@@ -67,6 +70,10 @@ def create_app(config_class=Config):
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
+
+    if config_class.LLM_PROVIDER in config_class.SUBSCRIPTION_PROVIDERS:
+        from .api.llm_compat import llm_compat_bp
+        app.register_blueprint(llm_compat_bp, url_prefix='/llm-compat')
     
     # 健康检查
     @app.route('/health')
@@ -77,4 +84,3 @@ def create_app(config_class=Config):
         logger.info("MiroFish Backend 启动完成")
     
     return app
-

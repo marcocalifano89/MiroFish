@@ -37,7 +37,10 @@ def main():
     app = create_app()
     
     # 获取运行配置
-    host = os.environ.get('FLASK_HOST', '0.0.0.0')
+    if Config.LLM_PROVIDER in Config.SUBSCRIPTION_PROVIDERS:
+        host = '127.0.0.1'
+    else:
+        host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5001))
     debug = Config.DEBUG
     
@@ -47,4 +50,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

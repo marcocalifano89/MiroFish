@@ -127,6 +127,17 @@ LLM_MODEL_NAME=qwen-plus
 ZEP_API_KEY=your_zep_api_key
 ```
 
+#### Use a Claude or ChatGPT subscription instead of an LLM API key
+
+MiroFish can use the official local CLIs with their supported account login:
+
+- **ChatGPT/Codex plan:** install Codex CLI and sign in with ChatGPT, then set `LLM_PROVIDER=codex_subscription`.
+- **Claude plan:** install Claude Code CLI and sign in with Claude, then set `LLM_PROVIDER=claude_subscription`.
+
+In either mode, leave `LLM_API_KEY` and the optional `LLM_BOOST_*` values empty. The backend routes model calls through a local-only compatibility endpoint to the selected CLI. Only one provider can be active at a time. CLI requests count against that account's included usage limits; long simulations can use substantial quota. Claude mode requires `claude login`; Codex mode requires `codex login`.
+
+The subscription bridge is bound to loopback (`127.0.0.1`) in these modes. Do not expose it to a network.
+
 #### 2. Install Dependencies
 
 ```bash
